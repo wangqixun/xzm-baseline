@@ -557,6 +557,7 @@ def train(cfg_file):
         my_lr(optimizer, epoch, cfg['lr_list'])
         train_loss = train_epoch(model, criterion, optimizer, x2_batch_converter, dataloader_tra, epoch, cfg)
 
+        _ = evaluate_val(model, x2_batch_converter, dataloader_tra, metrics_best, criterion, cfg, tra=True)
         metrics_val = evaluate_val(model, x2_batch_converter, dataloader_val, metrics_best, criterion, cfg)
 
         if metrics_val <= metrics_best:
@@ -567,7 +568,7 @@ def train(cfg_file):
                 'state_dict': model.state_dict(),
                 'best_acc': metrics_best,
                 'optimizer': optimizer.state_dict(),
-            }, outname='checkpoint_best.pth.tar', cfg=cfg)
+            }, outname=f'checkpoint_{metrics_best:.4f}.pth.tar', cfg=cfg)
 
         end_epoch = time.time() - end_epoch
         hou_epoch, min_epoch, sec_epoch = int(end_epoch / 3600), int(
