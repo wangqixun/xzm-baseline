@@ -1,0 +1,29 @@
+lr_list: [
+    1e-5,
+    1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5,
+    1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5,
+    1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5,
+]
+batch_size: 16
+nb_worker: 8
+
+aug_flip: True
+loss_mode: mse
+
+max_len_x1: 256
+max_len_x2: 128
+max_len_x3: 256
+mean_y: -10.785914067995314
+std_y: 2.272733205068275
+max_y: -2.795
+min_y: -17
+init_epoch: 1
+nb_batch_print: 10
+resume: output/v1/checkpoint_1.1945.pth.tar
+out_path: output/v3_mse_aug/
+
+
+
+
+
+
