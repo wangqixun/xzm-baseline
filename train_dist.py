@@ -203,7 +203,7 @@ class BaseSequence(Dataset):
         _, x1, x2, x3, y = self.data[idx]
         x1 = x1[:self.max_len_x1]
         x2 = x2[:self.max_len_x2]
-        if self.cfg.get('aug_flip', False) & np.random.rand() < 0.5:
+        if self.cfg.get('aug_flip', False) and np.random.rand() < 0.5:
             x1, x2 = x2, x1
         x3 = x3[:self.max_len_x3]
         loss_mode = self.cfg.get('loss_mode', 'mse')
