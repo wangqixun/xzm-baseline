@@ -197,14 +197,19 @@ class BaseSequence(Dataset):
         self.std_y = cfg['std_y']
         self.max_y = cfg['max_y']
         self.min_y = cfg['min_y']
-
+        self.cfg = cfg
 
     def __getitem__(self, idx):
         _, x1, x2, x3, y = self.data[idx]
         x1 = x1[:self.max_len_x1]
         x2 = x2[:self.max_len_x2]
         x3 = x3[:self.max_len_x3]
-        y = (float(y) - self.mean_y) / self.std_y
+        loss_mode = self.cfg.get('loss_mode', 'mse')
+        if loss_mode == 'mse':
+            y = (float(y) - self.mean_y) / self.std_y
+        elif loss_mode == 'bce':
+            y = (float(y) - self.min_y) / (self.max_y - self.min_y)
+
         return x1, x2, x3, y
 
     def __len__(self):
@@ -425,7 +430,12 @@ def train_epoch(model, criterion, optimizer, x2_batch_converter, dataloader_tra,
 
         output_batch = model([x1_input_batch, x1_batch], [x2_input_batch, x2_batch], [x3_input_batch, x3_batch])
 
-        loss_batch = criterion(output_batch.reshape([-1, ]).double(), y_batch.reshape([-1, ]).double())
+        loss_mode = cfg.get('loss_mode', 'mse')
+        if loss_mode == 'mse':
+            loss_batch = criterion(output_batch.reshape([-1, ]).double(), y_batch.reshape([-1, ]).double())
+        elif loss_mode == 'bce':
+            output_batch = torch.sigmoid(output_batch)
+            loss_batch = criterion(output_batch.reshape([-1, 1]).double(), y_batch.reshape([-1, 1]).double())
 
         loss_value = loss_batch.item()
         train_loss += loss_value
@@ -473,8 +483,14 @@ def evaluate_val(model, x2_batch_converter, val_loader, metrics_best, criterion,
             output_batch = output_batch.reshape([-1, ]).double()
             target_batch = y_batch.reshape([-1, ]).double()
 
-            output_batch = output_batch * cfg['std_y'] + cfg['mean_y']
-            target_batch = target_batch * cfg['std_y'] + cfg['mean_y']
+            loss_mode = cfg.get('loss_mode', 'mse')
+            if loss_mode == 'mse':
+                output_batch = output_batch * cfg['std_y'] + cfg['mean_y']
+                target_batch = target_batch * cfg['std_y'] + cfg['mean_y']
+            elif loss_mode == 'bce':
+                output_batch = torch.sigmoid(output_batch)
+                output_batch = output_batch * (cfg['max_y']-cfg['min_y']) + cfg['min_y']
+                target_batch = output_batch * (cfg['max_y']-cfg['min_y']) + cfg['min_y']
 
             total += target_batch.size()[0]
             pos = torch.sum(torch.abs(output_batch-target_batch))
@@ -518,8 +534,14 @@ def train(cfg_file):
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
     # optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
     # criterion = nn.CrossEntropyLoss()
-    criterion = nn.MSELoss()
-    
+    loss_mode = cfg.get('loss_mode', 'mse')
+    if loss_mode == 'mse':
+        criterion = nn.MSELoss()
+    elif loss_mode == 'bce':
+        criterion = nn.BCELoss()
+    else:
+        criterion = None
+        sys.exit()
 
     dataset_tra = BaseSequence(data_tra, cfg)
     dataset_val = BaseSequence(data_val, cfg)

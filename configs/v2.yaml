@@ -7,7 +7,7 @@ lr_list: [
 batch_size: 16
 nb_worker: 8
 
-loss_mode: mse
+loss_mode: bce
 
 max_len_x1: 256
 max_len_x2: 128
