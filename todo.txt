@@ -1,4 +1,5 @@
 对抗
 混合精度
+x1x2连接后进backbone
 x1x2共享，x3独立backbone
 x1x2x3独立backbone
