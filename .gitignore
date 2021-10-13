@@ -380,5 +380,4 @@ unlinked_spec.ds
 ########################## Custom ##########################
 output/
 weights/
-data/
 esm/
