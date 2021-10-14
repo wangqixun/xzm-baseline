@@ -342,11 +342,20 @@ class CNNLayer(nn.Module):
 
 
 class MyModel(nn.Module):
-    def __init__(self, x2_model):
+    def __init__(self, model_list, share_mode):
         super(MyModel, self).__init__()
+        self.share_mode = share_mode
 
-        # self.x1_model = x1_model
-        self.x2_model = x2_model
+        if share_mode == 'x1x2x3':
+            self.x1_model = model_list[0]
+        elif share_mode == 'x1x2_x3':
+            self.x1_model = model_list[0]
+            self.x2_model = model_list[1]
+        elif share_mode == 'x1_x2_x3':
+            self.x1_model = model_list[0]
+            self.x2_model = model_list[1]
+            self.x3_model = model_list[2]
+
         # for p in self.parameters():
         #     p.requires_grad = False
 
@@ -355,20 +364,27 @@ class MyModel(nn.Module):
         # self.middle_x1 = RNNLayer(nb_in=768, nb_out=256, layers=2)
         # self.middle_x2 = RNNLayer(nb_in=768, nb_out=256, layers=2)
 
-        # self.x1_ln = nn.LayerNorm(768)
+        self.x1_ln = nn.LayerNorm(768)
         self.x2_ln = nn.LayerNorm(768)
+        self.x3_ln = nn.LayerNorm(768)
 
         self.final_block = MyFinalLayer(nb_in=768*3, nb_out=1024, layers=2)
 
-    def mean_pooling_x1(self, model_output, attention_mask):
-        # token_embeddings = model_output[0]
-        token_embeddings = model_output
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
-        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-        return sum_embeddings / sum_mask
+    def mean_pooling_x1(self, model_output, len_seq):
+        sum_embeddings = [model_output[i:i + 1, 1: len_seq[i] + 1].mean(1) for i in range(len(model_output))]
+        sum_embeddings = torch.cat(sum_embeddings, dim=0)
+        if torch.cuda.is_available():
+            sum_embeddings = sum_embeddings.to(device)
+        return sum_embeddings
 
     def mean_pooling_x2(self, model_output, len_seq):
+        sum_embeddings = [model_output[i:i + 1, 1: len_seq[i] + 1].mean(1) for i in range(len(model_output))]
+        sum_embeddings = torch.cat(sum_embeddings, dim=0)
+        if torch.cuda.is_available():
+            sum_embeddings = sum_embeddings.to(device)
+        return sum_embeddings
+
+    def mean_pooling_x3(self, model_output, len_seq):
         sum_embeddings = [model_output[i:i + 1, 1: len_seq[i] + 1].mean(1) for i in range(len(model_output))]
         sum_embeddings = torch.cat(sum_embeddings, dim=0)
         if torch.cuda.is_available():
@@ -386,17 +402,37 @@ class MyModel(nn.Module):
         #     x2_embedding = self.x2_ln(x2_output["representations"][2])
         #     x2_embedding = self.mean_pooling_x2(x2_embedding, [len(seq) for _, seq in x2[1]])
 
-        x1_output = self.x2_model(x1[0], repr_layers=[6], return_contacts=False)
-        x1_embedding = self.x2_ln(x1_output["representations"][6])
-        x1_embedding = self.mean_pooling_x2(x1_embedding, [len(seq) for _, seq in x1[1]])
+        if self.share_mode == 'x1x2x3':
+            x1_output = self.x1_model(x1[0], repr_layers=[6], return_contacts=False)
+            x1_embedding = self.x1_ln(x1_output["representations"][6])
+            x1_embedding = self.mean_pooling_x1(x1_embedding, [len(seq) for _, seq in x1[1]])
+            x2_output = self.x1_model(x2[0], repr_layers=[6], return_contacts=False)
+            x2_embedding = self.x2_ln(x2_output["representations"][6])
+            x2_embedding = self.mean_pooling_x2(x2_embedding, [len(seq) for _, seq in x2[1]])
+            x3_output = self.x1_model(x3[0], repr_layers=[6], return_contacts=False)
+            x3_embedding = self.x3_ln(x3_output["representations"][6])
+            x3_embedding = self.mean_pooling_x3(x3_embedding, [len(seq) for _, seq in x3[1]])
+        elif self.share_mode == 'x1x2_x3':
+            x1_output = self.x1_model(x1[0], repr_layers=[6], return_contacts=False)
+            x1_embedding = self.x1_ln(x1_output["representations"][6])
+            x1_embedding = self.mean_pooling_x1(x1_embedding, [len(seq) for _, seq in x1[1]])
+            x2_output = self.x1_model(x2[0], repr_layers=[6], return_contacts=False)
+            x2_embedding = self.x2_ln(x2_output["representations"][6])
+            x2_embedding = self.mean_pooling_x2(x2_embedding, [len(seq) for _, seq in x2[1]])
+            x3_output = self.x2_model(x3[0], repr_layers=[6], return_contacts=False)
+            x3_embedding = self.x3_ln(x3_output["representations"][6])
+            x3_embedding = self.mean_pooling_x3(x3_embedding, [len(seq) for _, seq in x3[1]])
+        elif self.share_mode == 'x1_x2_x3':
+            x1_output = self.x1_model(x1[0], repr_layers=[6], return_contacts=False)
+            x1_embedding = self.x1_ln(x1_output["representations"][6])
+            x1_embedding = self.mean_pooling_x1(x1_embedding, [len(seq) for _, seq in x1[1]])
+            x2_output = self.x2_model(x2[0], repr_layers=[6], return_contacts=False)
+            x2_embedding = self.x2_ln(x2_output["representations"][6])
+            x2_embedding = self.mean_pooling_x2(x2_embedding, [len(seq) for _, seq in x2[1]])
+            x3_output = self.x3_model(x3[0], repr_layers=[6], return_contacts=False)
+            x3_embedding = self.x3_ln(x3_output["representations"][6])
+            x3_embedding = self.mean_pooling_x3(x3_embedding, [len(seq) for _, seq in x3[1]])
 
-        x2_output = self.x2_model(x2[0], repr_layers=[6], return_contacts=False)
-        x2_embedding = self.x2_ln(x2_output["representations"][6])
-        x2_embedding = self.mean_pooling_x2(x2_embedding, [len(seq) for _, seq in x2[1]])
-
-        x3_output = self.x2_model(x3[0], repr_layers=[6], return_contacts=False)
-        x3_embedding = self.x2_ln(x3_output["representations"][6])
-        x3_embedding = self.mean_pooling_x2(x3_embedding, [len(seq) for _, seq in x3[1]])
 
         out = torch.cat([x1_embedding, x2_embedding, x3_embedding], dim=-1)
         out = self.final_block(out)
@@ -532,11 +568,28 @@ def train(cfg_file):
     data_tra = data[:int(tra_val_ratio*len(data))]
     data_val = data[int(tra_val_ratio*len(data)):]
 
-    # x2_model, x2_alphabet = esm.pretrained.load_model_and_alphabet_local('weights/esm1_t6_43M_UR50S.pt')
-    x2_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
-    print(x2_model)
-    x2_batch_converter = x2_alphabet.get_batch_converter()
-    model = MyModel(x2_model)
+    share_mode = cfg.get('share_mode', 'x1x2x3')
+    if share_mode == 'x1x2x3':
+        # x2_model, x2_alphabet = esm.pretrained.load_model_and_alphabet_local('weights/esm1_t6_43M_UR50S.pt')
+        x2_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
+        x2_batch_converter = x2_alphabet.get_batch_converter()
+        model = MyModel([x2_model], share_mode)
+    elif share_mode == 'x1x2_x3':
+        x1_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
+        x2_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
+        x2_batch_converter = x2_alphabet.get_batch_converter()
+        model = MyModel([x1_model, x2_model], share_mode)
+    elif share_mode == 'x1_x2_x3':
+        x1_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
+        x2_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
+        x3_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
+        x2_batch_converter = x2_alphabet.get_batch_converter()
+        model = MyModel([x1_model, x2_model, x3_model], share_mode)
+    else:
+        sys.exit()
+
+    print(cfg)
+    print(model)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
     # optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)

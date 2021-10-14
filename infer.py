@@ -1,5 +1,7 @@
 from train_dist import *
 from rich import print
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 def infer_testa(cfg_file, checkpoint_file, output_file):
     data_file = 'data/final_dataset_testA.tsv'
@@ -11,7 +13,6 @@ def infer_testa(cfg_file, checkpoint_file, output_file):
     print(cfg_file)
     print(cfg)
 
-    x2_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
     x2_model, x2_alphabet = esm.pretrained.esm1_t6_43M_UR50S()
     x2_batch_converter = x2_alphabet.get_batch_converter()
     model = MyModel(x2_model)
@@ -26,7 +27,7 @@ def infer_testa(cfg_file, checkpoint_file, output_file):
     data = open(data_file).readlines()[1:]
     data = [line.strip().split('\t')[0:1]+line.strip().split('\t')[2:5]+['0'] for line in data]
     data = np.array(data)
-    dataset = BaseSequence(data, cfg, mode='val')
+    dataset = BaseSequence(data, cfg, mode='infer')
     dataloader = DataLoader(
         dataset, batch_size=cfg['batch_size'], num_workers=cfg['nb_worker'], pin_memory=True)
 
@@ -68,6 +69,6 @@ def infer_testa(cfg_file, checkpoint_file, output_file):
 
 if __name__ == '__main__':
     cfg_file = 'configs/v1.yaml'
-    checkpoint_file = 'output/v1_mse/checkpoint_1.1016.pth.tar'
+    checkpoint_file = 'output/v1_mse/checkpoint_1.0280.pth.tar'
     output_file = 'submit/testa_v1.csv'
     infer_testa(cfg_file, checkpoint_file, output_file)
