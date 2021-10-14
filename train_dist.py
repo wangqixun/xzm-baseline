@@ -563,10 +563,21 @@ def train(cfg_file):
     data = open(data_file).readlines()[1:]
     data = [line.strip().split('\t') for line in data]
     data = np.array(data)
-    np.random.shuffle(data)
 
-    data_tra = data[:int(tra_val_ratio*len(data))]
-    data_val = data[int(tra_val_ratio*len(data)):]
+    if not os.path.exists('tra_val.json'):
+        idx_all = list(range(len(data)))
+        np.random.shuffle(idx_all)
+        idx_tra = idx_all[:int(len(idx_all)*tra_val_ratio)]
+        idx_val = idx_all[int(len(idx_all)*tra_val_ratio):]
+        with open('tra_val.json', 'w') as f:
+            json.dump({'tra':idx_tra, 'val':idx_val}, f)
+    else:
+        d = open_json('tra_val.json')
+        idx_tra = d['tra']
+        idx_val = d['val']
+
+    data_tra = data[idx_tra]
+    data_val = data[idx_val]
 
     share_mode = cfg.get('share_mode', 'x1x2x3')
     if share_mode == 'x1x2x3':
