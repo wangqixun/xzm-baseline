@@ -198,12 +198,13 @@ class BaseSequence(Dataset):
         self.max_y = cfg['max_y']
         self.min_y = cfg['min_y']
         self.cfg = cfg
+        self.mode = mode
 
     def __getitem__(self, idx):
-        _, x1, x2, x3, y = self.data[idx]
+        x0, x1, x2, x3, y = self.data[idx]
         x1 = x1[:self.max_len_x1]
         x2 = x2[:self.max_len_x2]
-        if self.cfg.get('aug_flip', False) and np.random.rand() < 0.5:
+        if self.cfg.get('aug_flip', False) and np.random.rand() < 0.5 and self.mode=='train':
             x1, x2 = x2, x1
         x3 = x3[:self.max_len_x3]
         loss_mode = self.cfg.get('loss_mode', 'mse')
@@ -212,7 +213,11 @@ class BaseSequence(Dataset):
         elif loss_mode == 'bce':
             y = (float(y) - self.min_y) / (self.max_y - self.min_y)
 
-        return x1, x2, x3, y
+        if self.mode == 'train' or self.mode == 'val':
+            return x1, x2, x3, y
+        else:
+            return x0, x1, x2, x3, y
+
 
     def __len__(self):
         return len(self.data)
@@ -546,7 +551,7 @@ def train(cfg_file):
         sys.exit()
 
     dataset_tra = BaseSequence(data_tra, cfg)
-    dataset_val = BaseSequence(data_val, cfg)
+    dataset_val = BaseSequence(data_val, cfg, mode='val')
     dataloader_tra = DataLoader(
         dataset_tra, batch_size=cfg['batch_size'], num_workers=cfg['nb_worker'], pin_memory=True,
         sampler=DistributedSampler(dataset_tra))
