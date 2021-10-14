@@ -208,7 +208,7 @@ class BaseSequence(Dataset):
             x1, x2 = x2, x1
         x3 = x3[:self.max_len_x3]
         loss_mode = self.cfg.get('loss_mode', 'mse')
-        if loss_mode == 'mse':
+        if loss_mode in ['mse', 'mae']:
             y = (float(y) - self.mean_y) / self.std_y
         elif loss_mode == 'bce':
             y = (float(y) - self.min_y) / (self.max_y - self.min_y)
@@ -339,6 +339,16 @@ class CNNLayer(nn.Module):
         x = torch.transpose(x, 1, 2)
 
         return x
+
+
+class MAELoss(nn.Module):
+    def __init__(self, ):
+        super(MAELoss, self).__init__()
+
+    def forward(self, input, target):
+        loss = torch.abs(input-target)
+        loss = torch.mean(loss)
+        return loss
 
 
 class MyModel(nn.Module):
@@ -474,7 +484,7 @@ def train_epoch(model, criterion, optimizer, x2_batch_converter, dataloader_tra,
         output_batch = model([x1_input_batch, x1_batch], [x2_input_batch, x2_batch], [x3_input_batch, x3_batch])
 
         loss_mode = cfg.get('loss_mode', 'mse')
-        if loss_mode == 'mse':
+        if loss_mode in ['mse', 'mae']:
             loss_batch = criterion(output_batch.reshape([-1, ]).double(), y_batch.reshape([-1, ]).double())
         elif loss_mode == 'bce':
             output_batch = torch.sigmoid(output_batch)
@@ -497,14 +507,18 @@ def train_epoch(model, criterion, optimizer, x2_batch_converter, dataloader_tra,
     return train_loss
 
 
+def spearmanr(y_pred, y_true):
+    diff_pred, diff_true = y_pred - np.mean(y_pred), y_true - np.mean(y_true)
+    return np.sum(diff_pred * diff_true) / np.sqrt(np.sum(diff_pred **2) * np.sum(diff_true **2))
+
+
 def evaluate_val(model, x2_batch_converter, val_loader, metrics_best, criterion, cfg, tra=False):
     if tra:
         print('tra evaluating ...')
     else:
         print('val evaluating ...')
 
-    total = 0
-    correct = 0
+    y_pred, y_true = [], []
     model.eval()
     with torch.no_grad():
         for i, (x1_batch, x2_batch, x3_batch, y_batch) in enumerate(val_loader):
@@ -527,21 +541,22 @@ def evaluate_val(model, x2_batch_converter, val_loader, metrics_best, criterion,
             target_batch = y_batch.reshape([-1, ]).double()
 
             loss_mode = cfg.get('loss_mode', 'mse')
-            if loss_mode == 'mse':
+            if loss_mode in ['mse', 'mae']:
                 output_batch = output_batch * cfg['std_y'] + cfg['mean_y']
                 target_batch = target_batch * cfg['std_y'] + cfg['mean_y']
             elif loss_mode == 'bce':
                 output_batch = torch.sigmoid(output_batch)
                 output_batch = output_batch * (cfg['max_y']-cfg['min_y']) + cfg['min_y']
-                target_batch = output_batch * (cfg['max_y']-cfg['min_y']) + cfg['min_y']
+                target_batch = target_batch * (cfg['max_y']-cfg['min_y']) + cfg['min_y']
 
-            total += target_batch.size()[0]
-            pos = torch.sum(torch.abs(output_batch-target_batch))
-            if torch.cuda.is_available():
-                pos = pos.cpu()
-            correct += pos.numpy()
+            y_pred.append(output_batch.cpu().numpy())
+            y_true.append(target_batch.cpu().numpy())
 
-    metrics = float(correct) / total
+    y_pred = np.concatenate(y_pred, axis=0).reshape([-1, ])
+    y_true = np.concatenate(y_true, axis=0).reshape([-1, ])
+
+    metrics = spearmanr(y_pred, y_true)
+
     if tra:
         print('- tra_: %.4f ' % metrics)
     else:
@@ -556,7 +571,7 @@ def train(cfg_file):
 
     init_epoch = cfg['init_epoch']
     epochs = len(cfg['lr_list'])
-    metrics_best = 9999
+    metrics_best = 0
     loss_best = 9999.
     tra_val_ratio = 0.8
 
@@ -608,6 +623,8 @@ def train(cfg_file):
     loss_mode = cfg.get('loss_mode', 'mse')
     if loss_mode == 'mse':
         criterion = nn.MSELoss()
+    elif loss_mode == 'mae':
+        criterion = MAELoss()
     elif loss_mode == 'bce':
         criterion = nn.BCELoss()
     else:
@@ -653,7 +670,7 @@ def train(cfg_file):
         _ = evaluate_val(model, x2_batch_converter, dataloader_tra, metrics_best, criterion, cfg, tra=True)
         metrics_val = evaluate_val(model, x2_batch_converter, dataloader_val, metrics_best, criterion, cfg)
 
-        if metrics_val <= metrics_best:
+        if metrics_val >= metrics_best:
             metrics_best, loss_best = metrics_val, train_loss
 
             save_checkpoint({

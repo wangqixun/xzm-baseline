@@ -16,11 +16,11 @@ lr_list: [
     1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5,
     1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5,
 ]
-batch_size: 12
+batch_size: 16
 nb_worker: 8
 
 loss_mode: mae
-share_mode: x1_x2_x3
+share_mode: x1x2x3
 
 max_len_x1: 256
 max_len_x2: 128
@@ -32,7 +32,7 @@ min_y: -17
 init_epoch: 1
 nb_batch_print: 10
 resume: output/xxxxxx.tar
-out_path: output/v5_mae_x1_x2_x3/
+out_path: output/v7_mae_x1x2x3/
 
 
 
